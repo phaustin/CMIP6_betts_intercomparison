@@ -6,7 +6,7 @@ jupytext:
     extension: .md
     format_name: myst
     format_version: 0.13
-    jupytext_version: 1.13.4
+    jupytext_version: 1.13.7
 kernelspec:
   display_name: Python 3 (ipykernel)
   language: python
@@ -40,7 +40,7 @@ odie = pooch.create(
     path="./.cache",
     base_url="https://storage.googleapis.com/cmip6/",
     registry={
-        "pangeo-cmip6.csv": "e319cd2bf1daf9b5aa531f92c022d5322ee6bce0b566ac81dfae31dbae203fd9"
+        "pangeo-cmip6.csv": None
     },
 )
 ```
@@ -51,19 +51,15 @@ df_og = pd.read_csv(file_path)
 ```
 
 ```{code-cell} ipython3
-df_og.columns
+for var in df_og["variable_id"]:
+    print(var)
 ```
 
 ```{code-cell} ipython3
-[print(iden) for iden in df_og.source_id if "CMIP" in str(iden)]
+#[print(iden) for iden in df_og.source_id if "CMIP" in str(iden)]
 ```
 
 ```{code-cell} ipython3
-the_dict = dict(source_id = 'GFDL-ESM4', variable_id = 'ps',
-                experiment_id = 'piControl', table_id = 'Amon')
-
-
-
 def fetch_var_approx(the_dict,df_og):
     the_keys = list(the_dict.keys())
     print(the_keys)
@@ -82,6 +78,7 @@ def fetch_var_approx(the_dict,df_og):
     df_result = df_og[hitnew]
     return df_result
 
+
 def fetch_var_exact(the_dict,df_og):
     the_keys = list(the_dict.keys())
     print(the_keys)
@@ -99,60 +96,92 @@ def fetch_var_exact(the_dict,df_og):
         hitnew = hit0
     df_result = df_og[hitnew]
     return df_result
-        
-    
-out_df = fetch_var_exact(the_dict,df_og)
-zstore_url = out_df['zstore'].array[0]
-out_df.head()
 ```
 
 ```{code-cell} ipython3
+# get surface pressure 
+ps_dict = dict(source_id = 'GFDL-ESM4', variable_id = 'ps',
+                experiment_id = 'piControl', table_id = 'Amon')
+local_ps = fetch_var_exact(ps_dict, df_og)
+zstore_url = local_ps['zstore'].array[0]
 fs = fsspec.filesystem("filecache", target_protocol='gs', target_options={'anon': True}, cache_storage='/tmp/files/')
-```
-
-```{code-cell} ipython3
-help(fs)
-```
-
-```{code-cell} ipython3
-dir(fs)
-```
-
-```{code-cell} ipython3
-the_dict = dict(source_id = 'GFDL-ESM4',variable_id = 'ps',
-                experiment_id = 'piControl', table_id = 'Amon')
-out_df = fetch_var_exact(the_dict,df_og)
-zstore_url_ps = out_df['zstore'].array[0]
-```
-
-```{code-cell} ipython3
-the_dict = dict(source_id = 'GFDL-ESM4',variable_id = 'cl',
-                experiment_id = 'piControl', table_id = 'Amon')
-out_df = fetch_var_exact(the_dict,df_og)
-zstore_url_cl = out_df['zstore'].array[0]
-```
-
-```{code-cell} ipython3
 the_mapper = fs.get_mapper(zstore_url)
-ds = xr.open_zarr(the_mapper, consolidated=True)
-ds.variables['ps']
-```
+local_ps = xr.open_zarr(the_mapper, consolidated=True)
 
-```{code-cell} ipython3
-the_dict = dict(source_id = 'GFDL-ESM4',variable_id = 'cl',
+
+# get ap, b variables
+cl_dict = dict(source_id = 'GFDL-ESM4', variable_id = 'cl',
                 experiment_id = 'piControl', table_id = 'Amon')
-out_df = fetch_var_exact(the_dict,df_og)
-zstore_url_cl = out_df['zstore'].array[0]
+local_sig = fetch_var_exact(cl_dict, df_og)
+zstore_url = local_sig['zstore'].array[0]
+fs = fsspec.filesystem("filecache", target_protocol='gs', target_options={'anon': True}, cache_storage='/tmp/files/')
+the_mapper = fs.get_mapper(zstore_url)
+local_sig = xr.open_zarr(the_mapper, consolidated=True)
+local_sig
+
+
+# temperature (as a 4d variable template)
+ta_dict = dict(source_id = 'GFDL-ESM4', variable_id = 'ta',
+                experiment_id = 'piControl', table_id = 'Amon')
+local_ta = fetch_var_exact(ta_dict, df_og)
+zstore_url = local_ta['zstore'].array[0]
+fs = fsspec.filesystem("filecache", target_protocol='gs', target_options={'anon': True}, cache_storage='/tmp/files/')
+the_mapper = fs.get_mapper(zstore_url)
+local_ta = xr.open_zarr(the_mapper, consolidated=True)
+local_ta
 ```
 
 ```{code-cell} ipython3
-the_mapper = fs.get_mapper(zstore_url_cl)
-ds = xr.open_zarr(the_mapper, consolidated=True)
-ds
+local_ps.ps
 ```
 
 ```{code-cell} ipython3
-11*6000*4.*1.e-6
+press_in = xr.combine_by_coords((local_ps.ps, local_sig.ap, local_sig.b), compat="broadcast_equals")
+press_in["press"] = press_in.ap + press_in.b
+```
+
+```{code-cell} ipython3
+press_in
+```
+
+```{code-cell} ipython3
+ps_4d = (local_ps.ps.values[:,np.newaxis])
+np.shape(ps_4d)
+```
+
+```{code-cell} ipython3
+ap_4d = (local_sig.ap.values[np.newaxis,:,np.newaxis, np.newaxis])
+np.shape(ap_4d)
+```
+
+```{code-cell} ipython3
+ps_4d * ap_4d
+```
+
+```{code-cell} ipython3
+# select lat/lon domain
+domain = ds.sel(lat=slice(10,20), lon=slice(10,21))
+
+# ap, b extend upwards. psurf has same dims as (lat, lon)
+# X = lon, Y = Lat, Z = lev
+np.shape(domain.lat)[0]
+```
+
+```{code-cell} ipython3
+domain
+```
+
+```{code-cell} ipython3
+
+```
+
+```{code-cell} ipython3
+ap3d = domain.ap.values[:, np.newaxis, np.newaxis]
+
+
+b3d = domain.b.values[:, np.newaxis, np.newaxis]
+
+domain
 ```
 
 ```{code-cell} ipython3
