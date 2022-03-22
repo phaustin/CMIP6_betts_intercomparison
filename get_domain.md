@@ -32,6 +32,21 @@ http://proj.badc.rl.ac.uk/svn/exarch/CMIP6dreq/tags/latest/dreqPy/docs/CMIP6_MIP
 https://esgf-node.llnl.gov/search/cmip6/
 
 ```{code-cell} ipython3
+# Attributes of the model we want to analyze (put in csv later)
+source_id = 'GFDL-ESM4'
+experiment_id = 'piControl'
+table_id = 'Amon'
+
+# Domain we wish to study
+lats = (10, 20) # lat min, lat max
+lons = (20, 29) # lon min, lon max
+ceil = 500 # top of domain, hPa
+
+# variables of interest
+fields_of_interest = ("ps", "cl", "ta") 
+```
+
+```{code-cell} ipython3
 import xarray as xr
 import pooch
 import pandas as pd
@@ -43,63 +58,88 @@ import json
 ```
 
 ```{code-cell} ipython3
-# upload these from a .csv later, containing all applicable models
-fetch_this = {"path":None,
-              "base_url":"https://storage.googleapis.com/cmip6/",
-              "registry":{"pangeo-cmip6.csv": None}
-             }
-
-file_params = {"source_id":"GFDL-ESM4", 
-               "variable_id":"ps",
-               "experiment_id":"piControl",
-               "table_id":"Amon"
-              }
-```
-
-```{code-cell} ipython3
-odie = pooch.create(**fetch_this)
-```
-
-```{code-cell} ipython3
+#get esm datastore
+odie = pooch.create(
+    path="./.cache",
+    base_url="https://storage.googleapis.com/cmip6/",
+    registry={
+        "pangeo-cmip6.csv": None
+    },
+)
 file_path = odie.fetch("pangeo-cmip6.csv")
-df_in = pd.read_csv(file_path)
-df_in
+df_og = pd.read_csv(file_path)
 ```
 
 ```{code-cell} ipython3
-def fetch_var_exact(the_dict,df_in):
-    """
-    Extracts a variable given the address dict with keys:
-    
-        ["source_id", "variable_id", "experiment_id", "table_id"]
-    
-    returns a dataframe containing the variable
-    """
+def fetch_var_exact(the_dict,df_og):
     the_keys = list(the_dict.keys())
-    print(the_keys)
+    #print(the_keys)
     key0 = the_keys[0]
-    print(key0)
-    print(the_dict[key0])
-    hit0 = df_in[key0] == the_dict[key0]
+    #print(key0)
+    #print(the_dict[key0])
+    hit0 = df_og[key0] == the_dict[key0]
     if len(the_keys) > 1:
         hitnew = hit0
         for key in the_keys[1:]:
-            hit = df_in[key] == the_dict[key]
+            hit = df_og[key] == the_dict[key]
             hitnew = np.logical_and(hitnew,hit)
-            print("total hits: ",np.sum(hitnew))
+            #print("total hits: ",np.sum(hitnew))
     else:
         hitnew = hit0
-    df_result = df_in[hitnew]
+    df_result = df_og[hitnew]
     return df_result
-        
 ```
 
 ```{code-cell} ipython3
-out_df = fetch_var_exact(file_params,df_in) # extract just the field we want
-zstore_url = out_df['zstore'].array[0] # save it with zarr
-lp_ds = xr.open_zarr(fsspec.get_mapper(zstore_url), consolidated=True)
+def get_field(variable_id, 
+              df,
+              source_id=source_id,
+              experiment_id=experiment_id,
+              table_id=table_id):
+    """
+    extracts a single variable field from the model
+    """
+
+    var_dict = dict(source_id = 'GFDL-ESM4', variable_id = variable_id,
+                    experiment_id = 'piControl', table_id = 'Amon')
+    local_var = fetch_var_exact(var_dict, df)
+    zstore_url = local_var['zstore'].array[0]
+    the_mapper=fsspec.get_mapper(zstore_url)
+    local_var = xr.open_zarr(the_mapper, consolidated=True)
+    return local_var
 ```
 
 ```{code-cell} ipython3
+def trim_field(df, lat, lon):
+    """
+    cuts out a specified domain from an xarrray field
+    
+    lat = (minlat, maxlat)
+    lon = (minlon, maxlon)
+    """
+    new_field = df.sel(lat=slice(lat[0],lat[1]), lon=slice(lon[0],lon[1]))
+    return new_field
+```
 
+## Create one big dataset to represent our domain
+
+```{code-cell} ipython3
+# grab all fields of interest and combine
+my_fields = [get_field(field, df_og) for field in fields_of_interest]
+small_fields = [trim_field(field, lats, lons) for field in my_fields]
+my_ds = xr.combine_by_coords(small_fields, compat="broadcast_equals", combine_attrs="drop_conflicts")
+```
+
+```{code-cell} ipython3
+# add pressure field, convert from sigma pressure
+my_ds["p"] = my_ds.ap + my_ds.b * my_ds.ps
+my_ds
+```
+
+```{code-cell} ipython3
+## get data from desired model run
+
+## extract desired fields with jamies functions and cut to size
+
+## generate additional fields (like pressure levels)
 ```

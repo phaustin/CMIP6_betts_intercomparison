@@ -104,8 +104,9 @@ ps_dict = dict(source_id = 'GFDL-ESM4', variable_id = 'ps',
                 experiment_id = 'piControl', table_id = 'Amon')
 local_ps = fetch_var_exact(ps_dict, df_og)
 zstore_url = local_ps['zstore'].array[0]
-fs = fsspec.filesystem("filecache", target_protocol='gs', target_options={'anon': True}, cache_storage='/tmp/files/')
-the_mapper = fs.get_mapper(zstore_url)
+#fs = fsspec.filesystem("filecache", target_protocol='gs', target_options={'anon': True}, cache_storage='/tmp/files/')
+#the_mapper = fs.get_mapper(zstore_url)
+the_mapper=fsspec.get_mapper(zstore_url)
 local_ps = xr.open_zarr(the_mapper, consolidated=True)
 
 
@@ -145,12 +146,12 @@ press_in
 ```
 
 ```{code-cell} ipython3
-ps_4d = (local_ps.ps.values[:,np.newaxis])
+ps_4d = (local_ps.ps.values[-1,...,np.newaxis])
 np.shape(ps_4d)
 ```
 
 ```{code-cell} ipython3
-ap_4d = (local_sig.ap.values[np.newaxis,:,np.newaxis, np.newaxis])
+ap_4d = (local_sig.ap.values[:,np.newaxis, np.newaxis])
 np.shape(ap_4d)
 ```
 
@@ -160,7 +161,7 @@ ps_4d * ap_4d
 
 ```{code-cell} ipython3
 # select lat/lon domain
-domain = ds.sel(lat=slice(10,20), lon=slice(10,21))
+domain = ds.sel(lat=slice(10,20), lon=slice(10,21), )
 
 # ap, b extend upwards. psurf has same dims as (lat, lon)
 # X = lon, Y = Lat, Z = lev
