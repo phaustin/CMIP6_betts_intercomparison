@@ -180,8 +180,8 @@ def p_lcl(ds):
 ```
 
 ```{code-cell} ipython3
-mean_tsurf = my_ds.ts.mean(dim=("lat", "lon"))
-mean_psurf = my_ds.ps.mean(dim=("lat", "lon"))
+#mean_tsurf = my_ds.ts.mean(dim=("lat", "lon"))
+#mean_psurf = my_ds.ps.mean(dim=("lat", "lon"))
 ```
 
 ```{code-cell} ipython3
@@ -190,7 +190,7 @@ my_ds = press_from_sigma(my_ds)
 ```
 
 ```{code-cell} ipython3
-my_ds["hus"]
+#my_ds["hus"]
 ```
 
 ```{code-cell} ipython3
