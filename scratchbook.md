@@ -20,6 +20,10 @@ kernelspec:
 experiment space for writing, testing code related to Betts CMIP6 intercomparison project
 
 ```{code-cell} ipython3
+## Part I: Get a CMIP 6 Dataset and Select Domain
+```
+
+```{code-cell} ipython3
 import xarray as xr
 import pooch
 import pandas as pd
@@ -28,11 +32,12 @@ from pathlib import Path
 import time
 import numpy as np
 import json
+import cftime
 ```
 
 ```{code-cell} ipython3
 # Attributes of the model we want to analyze (put in csv later)
-#source_id = 'BCC-CSM2-MR'
+#source_id = 'CESM2-SE'
 source_id = 'GFDL-ESM4'
 experiment_id = 'piControl'
 #table_id = 'Amon'
@@ -41,8 +46,19 @@ table_id = '3hr'
 # Domain we wish to study
 lats = (10, 20) # lat min, lat max
 lons = (20, 29) # lon min, lon max
-times = () # start time, end time
+years = (100, 200)
+        #(cftime.DatetimeNoLeap(2000, 1, 1, 1, 30, 0, 0, has_year_zero=True), # start time,
+         #cftime.DatetimeNoLeap(2022, 1, 1, 1, 30, 0, 0, has_year_zero=True)) #  end time
 ceil = 500 # top of domain, hPa
+
+print(f"""Fetching domain:
+          {source_id = }
+          {experiment_id = }
+          {table_id = }
+          {lats = }
+          {lons = }
+          {years = }
+          dataset name: my_ds (xarray Dataset)""")
 ```
 
 ```{code-cell} ipython3
@@ -63,10 +79,13 @@ required_fields = ("ps",  # surface pressure
                       "evspsbl", # evaporation, sublimation, transpiration
                       "wap",  # omega (subsidence rate in pressure coords)
                      )
+
+required_fields = ['tas', 'mrsos', 'mrro', 'tslsi', 'huss'] # temporary hack, but this will work for fig 11
+# i need to know which models we intend to parse for this project, they do not all have the same fields
 ```
 
 ```{code-cell} ipython3
-#get esm datastore
+# get esm datastore
 odie = pooch.create(
     path="./.cache",
     base_url="https://storage.googleapis.com/cmip6/",
@@ -104,7 +123,7 @@ if missing_fields != []:
                 {table_id}, 
                 {experiment_id} 
 
-         missing required field(s) {missing_fields}""")
+         missing required field(s): {missing_fields}""")
 ```
 
 ```{code-cell} ipython3
@@ -141,18 +160,14 @@ def get_field(variable_id,
                     experiment_id = experiment_id, table_id = table_id)
     
     local_var = fetch_var_exact(var_dict, df)
-    try:
-        zstore_url = local_var['zstore'].array[0]
-    except:
-        print(f"failed on '{variable_id}'.")
-        print(f"fields available in {local_var}")
+    zstore_url = local_var['zstore'].array[0]
     the_mapper=fsspec.get_mapper(zstore_url)
     local_var = xr.open_zarr(the_mapper, consolidated=True)
     return local_var
 ```
 
 ```{code-cell} ipython3
-def trim_field(df, lat, lon):
+def trim_field(df, lat, lon, years):
     """
     cuts out a specified domain from an xarrray field
     
@@ -160,16 +175,44 @@ def trim_field(df, lat, lon):
     lon = (minlon, maxlon)
     """
     new_field = df.sel(lat=slice(lat[0],lat[1]), lon=slice(lon[0],lon[1]))
+    new_field = new_field.isel(time=(new_field.time.dt.year > years[0]))
+    new_field = new_field.isel(time=(new_field.time.dt.year < years[1]))
     return new_field
 ```
 
 ```{code-cell} ipython3
 # grab all fields of interest and combine
 my_fields = [get_field(field, df_in) for field in fields_of_interest]
-small_fields = [trim_field(field, lats, lons) for field in my_fields]
+small_fields = [trim_field(field, lats, lons, years) for field in my_fields]
 my_ds = xr.combine_by_coords(small_fields, compat="broadcast_equals", combine_attrs="drop_conflicts")
+print("Successfully aquired domain")
 ```
 
 ```{code-cell} ipython3
 my_ds
+```
+
+## Part II: Convert to MetPy Standards and Copy Betts Fig 11
+
+```{code-cell} ipython3
+# Handy metpy tutorial working with xarray:
+# https://unidata.github.io/MetPy/latest/tutorials/xarray_tutorial.html#sphx-glr-tutorials-xarray-tutorial-py
+import metpy.calc as mpcalc
+from metpy.cbook import get_test_data
+from metpy.units import units
+from metpy.plots import SkewT
+```
+
+```{code-cell} ipython3
+# parse the whole dataset to comform to metpy norms
+dparsed = my_ds.metpy.parse_cf()
+dparsed
+```
+
+```{code-cell} ipython3
+dparsed.isel(time=(dparsed.time.dt.year > 20))
+```
+
+```{code-cell} ipython3
+
 ```
