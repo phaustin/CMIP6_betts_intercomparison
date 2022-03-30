@@ -33,6 +33,7 @@ https://esgf-node.llnl.gov/search/cmip6/
 
 ```{code-cell} ipython3
 # Attributes of the model we want to analyze (put in csv later)
+source_id = 'ACCESS-CM2'
 source_id = 'GFDL-ESM4'
 experiment_id = 'piControl'
 table_id = 'Amon'
@@ -40,6 +41,7 @@ table_id = 'Amon'
 # Domain we wish to study
 lats = (10, 20) # lat min, lat max
 lons = (20, 29) # lon min, lon max
+times = ()
 ceil = 500 # top of domain, hPa
 
 # variables of interest
@@ -59,11 +61,33 @@ fields_of_interest = ("ps",  # surface pressure
                       "evspsbl", # evaporation, sublimation, transpiration
                       "wap"  # omega (subsidence rate in pressure coords)
                      )
-                     
-                        #"mrsol" # total soil water content 
-                     #"bldep", ) # boundary layer depth
-                     # "tsl")  # soil temperature
-                      #"mrsos",) # soil water content, top 10cm
+```
+
+```{code-cell} ipython3
+# hourly data (put in csv with monthly control set)
+#source_id = 'GFDL-ESM4'
+#experiment_id = 'piControl'
+#table_id = 'CF3hr'
+
+#lats = (10, 20) # lat min, lat max
+#lons = (20, 29) # lon min, lon max
+#ceil = 500 # top of domain, hPa
+
+# variables of interest
+#fields_of_interest = ("ps",  # surface pressure
+#                      "ta",)  # air temperature
+                     # "ts",  # surface temperature
+                     # "hus", # specific humidity
+                     # "hfls", # Surface Upward Latent Heat Flux
+                     # "hfss", # Surface Upward Sensible Heat Flux
+                     # "rlds",  # surface downwelling longwave
+                     # "rlus",  # surface upwelling longwave
+                     # "rsds", # downwelling short wave
+                     # "rsus", # upwelling short wave
+                     # "hurs",  # near surface RH
+                     # "pr", # precipitation, all phases
+                     # "evspsbl", # evaporation, sublimation, transpiration
+                     #)
 ```
 
 ```{code-cell} ipython3
@@ -186,11 +210,11 @@ def p_lcl(ds):
 
 ```{code-cell} ipython3
 # apply functions defined above to the field
-my_ds = press_from_sigma(my_ds)
+#my_ds = press_from_sigma(my_ds)
 ```
 
 ```{code-cell} ipython3
-#my_ds["hus"]
+my_ds
 ```
 
 ```{code-cell} ipython3

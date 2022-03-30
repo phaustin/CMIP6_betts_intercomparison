@@ -17,7 +17,7 @@ kernelspec:
     
 **Project:** Land-surface-atmosphere coupling - CMIP6 intercomparison 
 
-This notebook recreates figures 10, 11 from Betts (2009), and generate a skew-T plot averaged over the domain selected in `get_domain.ipynb`. 
+This notebook recreates figures 10, 11 from Betts (2009), and generate a skew-T plot averaged over the domain selected in `get_domain.ipynb`.
 
 ```{code-cell} ipython3
 import matplotlib.pyplot as plt
@@ -38,38 +38,31 @@ from metpy.plots import SkewT
 ```
 
 ```{code-cell} ipython3
-
-```
-
-```{code-cell} ipython3
-tsurf = my_ds.ts
-```
-
-```{code-cell} ipython3
-tsurf.metpy.time
-```
-
-```{code-cell} ipython3
-x, y = tsurf.metpy.coordinates("x", "y")
-x
-```
-
-```{code-cell} ipython3
+# parse the whole dataset to comform to metpy norms
 dparsed = my_ds.metpy.parse_cf()
 dparsed
 ```
 
 ```{code-cell} ipython3
-dparsed["td"] = mpcalc.dewpoint_from_relative_humidity(dparsed.ts, dparsed.hurs)
-dparsed
+# add a dewpoint temperature variable
+dparsed["td"] = mpcalc.dewpoint_from_relative_humidity(dparsed.ts, dparsed.hurs).metpy.convert_units('kelvin')
 ```
 
 ```{code-cell} ipython3
+dparsed.td
+```
+
+```{code-cell} ipython3
+# domain average inputs for lcl calculator (this cell takes a while to run)
 ps_mean = (dparsed.ps.mean(dim=("lon", "lat"))).values
 ts_mean = (dparsed.ts.mean(dim=("lon", "lat"))).values
 td_mean = (dparsed.td.mean(dim=("lon", "lat"))).values
-#tlcl, plcl = mpcalc.lcl(ps_mean, ts_mean, td_mean)
+
 ps_mean
+```
+
+```{code-cell} ipython3
+ts_mean
 ```
 
 ```{code-cell} ipython3
@@ -77,9 +70,11 @@ td_mean
 ```
 
 ```{code-cell} ipython3
+# calculate and plot lcl pressure
 plcl, tlcl = mpcalc.lcl(ps_mean * units.pascal, ts_mean * units.kelvin, td_mean * units.kelvin)
+plt.plot(plcl)
 ```
 
 ```{code-cell} ipython3
-plt.plot(plcl)
+
 ```
