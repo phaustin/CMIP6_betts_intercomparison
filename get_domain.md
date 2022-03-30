@@ -33,7 +33,7 @@ https://esgf-node.llnl.gov/search/cmip6/
 
 ```{code-cell} ipython3
 # Attributes of the model we want to analyze (put in csv later)
-source_id = 'ACCESS-CM2'
+source_id = 'AWI-CM-1-1-LR'
 source_id = 'GFDL-ESM4'
 experiment_id = 'piControl'
 table_id = 'Amon'
@@ -65,29 +65,31 @@ fields_of_interest = ("ps",  # surface pressure
 
 ```{code-cell} ipython3
 # hourly data (put in csv with monthly control set)
-#source_id = 'GFDL-ESM4'
-#experiment_id = 'piControl'
+'''
+source_id = 'GFDL-ESM4'
+experiment_id = 'piControl'
 #table_id = 'CF3hr'
 
-#lats = (10, 20) # lat min, lat max
-#lons = (20, 29) # lon min, lon max
-#ceil = 500 # top of domain, hPa
+lats = (10, 20) # lat min, lat max
+lons = (20, 29) # lon min, lon max
+ceil = 500 # top of domain, hPa
 
 # variables of interest
-#fields_of_interest = ("ps",  # surface pressure
-#                      "ta",)  # air temperature
-                     # "ts",  # surface temperature
-                     # "hus", # specific humidity
-                     # "hfls", # Surface Upward Latent Heat Flux
-                     # "hfss", # Surface Upward Sensible Heat Flux
-                     # "rlds",  # surface downwelling longwave
-                     # "rlus",  # surface upwelling longwave
-                     # "rsds", # downwelling short wave
-                     # "rsus", # upwelling short wave
-                     # "hurs",  # near surface RH
-                     # "pr", # precipitation, all phases
+fields_of_interest = ("ps",  # surface pressure
+                      "ta",  # air temperature
+                      "ts",  # surface temperature
+                      "hus", # specific humidity
+                      "hfls", # Surface Upward Latent Heat Flux
+                      "hfss", # Surface Upward Sensible Heat Flux
+                      "rlds",  # surface downwelling longwave
+                      "rlus",  # surface upwelling longwave
+                      "rsds", # downwelling short wave
+                      "rsus", # upwelling short wave
+                      "hurs",  # near surface RH
+                      "pr",) # precipitation, all phases
                      # "evspsbl", # evaporation, sublimation, transpiration
                      #)
+'''
 ```
 
 ```{code-cell} ipython3
@@ -112,6 +114,10 @@ odie = pooch.create(
 )
 file_path = odie.fetch("pangeo-cmip6.csv")
 df_og = pd.read_csv(file_path)
+```
+
+```{code-cell} ipython3
+df_og[df_og.source_id == source_id][df_og.experiment_id == experiment_id][df_og.table_id == table_id].variable_id
 ```
 
 ```{code-cell} ipython3
@@ -146,8 +152,13 @@ def get_field(variable_id,
 
     var_dict = dict(source_id = source_id, variable_id = variable_id,
                     experiment_id = experiment_id, table_id = table_id)
+    
     local_var = fetch_var_exact(var_dict, df)
-    zstore_url = local_var['zstore'].array[0]
+    try:
+        zstore_url = local_var['zstore'].array[0]
+    except:
+        print(f"failed on '{variable_id}'.")
+        print(f"fields available in {local_var}")
     the_mapper=fsspec.get_mapper(zstore_url)
     local_var = xr.open_zarr(the_mapper, consolidated=True)
     return local_var

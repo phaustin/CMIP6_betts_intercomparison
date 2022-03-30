@@ -34,7 +34,7 @@ https://esgf-node.llnl.gov/search/cmip6/
 ```{code-cell} ipython3
 # Attributes of the model we want to analyze (put in csv later)
 source_id = 'ACCESS-CM2'
-source_id = 'GFDL-ESM4'
+#source_id = 'GFDL-ESM4'
 experiment_id = 'piControl'
 table_id = 'Amon'
 
