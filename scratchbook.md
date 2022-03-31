@@ -19,6 +19,14 @@ kernelspec:
 
 experiment space for writing, testing code related to Betts CMIP6 intercomparison project
 
+**Workflow:** 
+
+1) get raw xarrays using Jamie's model fetching code. Screen models which do not contain required fields for doing the calculations
+
+2) convert to metpy CF standards using `metpy.parse_cf(<raw_xarray>)`. Generate the necessary fields to make the figures we want. 
+
+3) pare fields down to the most naive data type allowable (numpy arrays?) and plot with matplotlib (not some weird wrapper for matplotlib, too buggy).
+
 +++
 
 ## Part I: Get a CMIP 6 Dataset and Select Domain
@@ -201,13 +209,9 @@ my_ds
 ```
 
 ```{code-cell} ipython3
-ps = 100 * units.kilopascal # temporary hack, should interpolate pressure from daily timeseries
+#ps = 100 * units.kilopascal # temporary hack, should interpolate pressure from daily timeseries
 
-my_ds["td"] = mpcalc.dewpoint_from_specific_humidity(ps, my_ds.tas, my_ds.huss)
-```
-
-```{code-cell} ipython3
-my_ds
+#my_ds["td"] = mpcalc.dewpoint_from_specific_humidity(ps, my_ds.tas, my_ds.huss)
 ```
 
 ## Part II: Convert to MetPy Standards and Copy Betts Fig 11
@@ -217,21 +221,41 @@ ps = 100000 * units.Pa # temporary hack, should interpolate pressure from daily 
 ```
 
 ```{code-cell} ipython3
-# parse the whole dataset to comform to metpy norms
-dparsed = my_ds.metpy.parse_cf()
-dparsed
+# parse the whole dataset to comform to metpy norms, assign units to everything
+dparsed = my_ds.metpy.parse_cf().metpy.quantify()
+
+# take spatial average over domain, group by hour and average each hour over time domain
+spatial_average = dparsed.mean(dim=("lat", "lon"))
+# need to add a step here to select only warm months with PBL development
+hourly_data = spatial_average.groupby(dparsed.time.dt.hour).mean(dim="time")
+
+hourly_data
+```
+
+```{code-cell} ipython3
+specific_humidity = hourly_data.huss[np.isnan(hourly_data.huss.values) == False]
+surface_temp = hourly_data.tas[np.isnan(hourly_data.tas.values) == False]
+td = mpcalc.dewpoint_from_specific_humidity(ps, surface_temp, specific_humidity)
+```
+
+```{code-cell} ipython3
+plcl, tlcl = mpcalc.lcl(ps, surface_temp, td)
+```
+
+```{code-cell} ipython3
+plt.plot(plcl)
 ```
 
 ```{code-cell} ipython3
 # add variables to generate fig 11
-dparsed["td"] = mpcalc.dewpoint_from_specific_humidity(ps, dparsed.tas.metpy.convert_units("kelvin"), dparsed.huss / 1000)
+#dparsed["td"] = mpcalc.dewpoint_from_specific_humidity(ps, dparsed.tas.metpy.convert_units("kelvin"), dparsed.huss / 1000)
 ```
 
 ```{code-cell} ipython3
 # take spatial average over domain, group by hour and average each hour over time domain
 spatial_average = dparsed.mean(dim=("lat", "lon"))
 # need to add a step here to select only warm months with PBL development
-#hourly_data = spatial_average.groupby(dparsed.time.dt.hour).mean(dim="time")
+hourly_data = spatial_average.groupby(dparsed.time.dt.hour).mean(dim="time")
 ```
 
 ```{code-cell} ipython3
