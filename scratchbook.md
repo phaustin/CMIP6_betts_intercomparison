@@ -209,9 +209,7 @@ my_ds
 ```
 
 ```{code-cell} ipython3
-#ps = 100 * units.kilopascal # temporary hack, should interpolate pressure from daily timeseries
-
-#my_ds["td"] = mpcalc.dewpoint_from_specific_humidity(ps, my_ds.tas, my_ds.huss)
+dparsed.mrsos.values.round()
 ```
 
 ## Part II: Convert to MetPy Standards and Copy Betts Fig 11
@@ -224,12 +222,32 @@ ps = 100000 * units.Pa # temporary hack, should interpolate pressure from daily 
 # parse the whole dataset to comform to metpy norms, assign units to everything
 dparsed = my_ds.metpy.parse_cf().metpy.quantify()
 
-# take spatial average over domain, group by hour and average each hour over time domain
-spatial_average = dparsed.mean(dim=("lat", "lon"))
 # need to add a step here to select only warm months with PBL development
-hourly_data = spatial_average.groupby(dparsed.time.dt.hour).mean(dim="time")
 
-hourly_data
+# take spatial average over domain
+spatial_average = dparsed.mean(dim=("lat", "lon"))
+
+# separate by soil moisture by rounding to nearest kg/m3 in top soil layer
+spatial_average["soil_moisture_grp"] = spatial_average.mrsos.round()[np.isnan(spatial_average.mrsos.values) == False]
+gbysoil = spatial_average.groupby(spatial_average.soil_moisture_grp)
+```
+
+```{code-cell} ipython3
+# calculate and plot the average diurnal cycle of lcl height
+
+fig, ax = plt.subplots()
+for key in gbysoil.groups.keys():
+    # group by hour
+    hourly_data = gbysoil[key].groupby(gbysoil[key].time.dt.hour).mean(dim="time") 
+    
+    # get the extra variables 
+    specific_humidity = hourly_data.huss[np.isnan(hourly_data.huss.values) == False]
+    surface_temp = hourly_data.tas[np.isnan(hourly_data.tas.values) == False]
+    td = mpcalc.dewpoint_from_specific_humidity(ps, surface_temp, specific_humidity)
+    
+    # find and plot the lcl
+    plcl, tlcl = mpcalc.lcl(ps, surface_temp, td)
+    ax.plot(plcl)
 ```
 
 ```{code-cell} ipython3
