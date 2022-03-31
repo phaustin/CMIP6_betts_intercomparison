@@ -19,9 +19,9 @@ kernelspec:
 
 experiment space for writing, testing code related to Betts CMIP6 intercomparison project
 
-```{code-cell} ipython3
++++
+
 ## Part I: Get a CMIP 6 Dataset and Select Domain
-```
 
 ```{code-cell} ipython3
 import xarray as xr
@@ -33,6 +33,15 @@ import time
 import numpy as np
 import json
 import cftime
+import matplotlib.pyplot as plt
+
+
+# Handy metpy tutorial working with xarray:
+# https://unidata.github.io/MetPy/latest/tutorials/xarray_tutorial.html#sphx-glr-tutorials-xarray-tutorial-py
+import metpy.calc as mpcalc
+from metpy.cbook import get_test_data
+from metpy.units import units
+from metpy.plots import SkewT
 ```
 
 ```{code-cell} ipython3
@@ -44,12 +53,11 @@ experiment_id = 'piControl'
 table_id = '3hr'
 
 # Domain we wish to study
-lats = (10, 20) # lat min, lat max
-lons = (20, 29) # lon min, lon max
-years = (100, 200)
-        #(cftime.DatetimeNoLeap(2000, 1, 1, 1, 30, 0, 0, has_year_zero=True), # start time,
-         #cftime.DatetimeNoLeap(2022, 1, 1, 1, 30, 0, 0, has_year_zero=True)) #  end time
-ceil = 500 # top of domain, hPa
+lats = (15, 20) # lat min, lat max
+lons = (25, 29) # lon min, lon max
+years = (100, 105) # start year, end year (note, no leap days)
+#ceil = 500 # top of domain, hPa
+
 
 print(f"""Fetching domain:
           {source_id = }
@@ -185,7 +193,17 @@ def trim_field(df, lat, lon, years):
 my_fields = [get_field(field, df_in) for field in fields_of_interest]
 small_fields = [trim_field(field, lats, lons, years) for field in my_fields]
 my_ds = xr.combine_by_coords(small_fields, compat="broadcast_equals", combine_attrs="drop_conflicts")
-print("Successfully aquired domain")
+print("Successfully acquired domain")
+```
+
+```{code-cell} ipython3
+my_ds
+```
+
+```{code-cell} ipython3
+ps = 100 * units.kilopascal # temporary hack, should interpolate pressure from daily timeseries
+
+my_ds["td"] = mpcalc.dewpoint_from_specific_humidity(ps, my_ds.tas, my_ds.huss)
 ```
 
 ```{code-cell} ipython3
@@ -195,12 +213,7 @@ my_ds
 ## Part II: Convert to MetPy Standards and Copy Betts Fig 11
 
 ```{code-cell} ipython3
-# Handy metpy tutorial working with xarray:
-# https://unidata.github.io/MetPy/latest/tutorials/xarray_tutorial.html#sphx-glr-tutorials-xarray-tutorial-py
-import metpy.calc as mpcalc
-from metpy.cbook import get_test_data
-from metpy.units import units
-from metpy.plots import SkewT
+ps = 100000 * units.Pa # temporary hack, should interpolate pressure from daily timeseries
 ```
 
 ```{code-cell} ipython3
@@ -210,7 +223,43 @@ dparsed
 ```
 
 ```{code-cell} ipython3
-dparsed.isel(time=(dparsed.time.dt.year > 20))
+# add variables to generate fig 11
+dparsed["td"] = mpcalc.dewpoint_from_specific_humidity(ps, dparsed.tas.metpy.convert_units("kelvin"), dparsed.huss / 1000)
+```
+
+```{code-cell} ipython3
+# take spatial average over domain, group by hour and average each hour over time domain
+spatial_average = dparsed.mean(dim=("lat", "lon"))
+# need to add a step here to select only warm months with PBL development
+#hourly_data = spatial_average.groupby(dparsed.time.dt.hour).mean(dim="time")
+```
+
+```{code-cell} ipython3
+plcl, tlcl = mpcalc.lcl(ps, spatial_average.tas * units.kelvin, spatial_average.td)
+```
+
+```{code-cell} ipython3
+plt.plot(plcl)
+```
+
+```{code-cell} ipython3
+plot_me = np.array(plcl)[np.isnan(np.array(plcl)) == False]
+```
+
+```{code-cell} ipython3
+plt.plot(plot_me)
+#my_array = np.array([1, 2, np.nan])
+#my_array[np.isnan(my_array) == False]
+```
+
+```{code-cell} ipython3
+#fig, ax = plt.subplots()
+#ax.plot(hourly_data.hour[np.isnan(hourly_data.huss.values) == False], plot_this,)
+```
+
+```{code-cell} ipython3
+#warm_months = np.array([5,6,7,8,9])
+#dparsed.isel(time=(dparsed.time.dt.month == warm_months.any()))
 ```
 
 ```{code-cell} ipython3
