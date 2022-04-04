@@ -11,41 +11,76 @@ kernelspec:
   name: python3
 ---
 
-# Get Domain
+# Scratch Book
 
 **Author:** Andrew Loeppky (Lots of code stolen from Jamie Byer)
 
 **Project:** Land-surface-atmosphere coupling - CMIP6 intercomparison 
 
-This notebook is meant to acquire a dataset from the CMIP6 data library, chop out a pre-specified spatial slice (between coordinates specified by user), and save the dataset in Zarr format. Also adds a 3d pressure field variable, converting from surface pressure and sigma values $ap$ and $b$
+experiment space for writing, testing code related to Betts CMIP6 intercomparison project
 
-## Helpful Docs
+**Workflow:** 
 
-https://docs.google.com/document/d/1yUx6jr9EdedCOLd--CPdTfGDwEwzPpCF6p1jRmqx-0Q/edit#
+1) get raw xarrays using Jamie's model fetching code. Screen models which do not contain required fields for doing the calculations
 
-https://towardsdatascience.com/a-quick-introduction-to-cmip6-e017127a49d3
+2) convert to metpy CF standards using `metpy.parse_cf(<raw_xarray>)`. Generate the necessary fields to make the figures we want. 
 
-https://pcmdi.llnl.gov/CMIP6/Guide/dataUsers.html
+3) pare fields down to the most naive data type allowable (numpy arrays?) and plot with matplotlib (not some weird wrapper for matplotlib, too buggy).
 
-http://proj.badc.rl.ac.uk/svn/exarch/CMIP6dreq/tags/latest/dreqPy/docs/CMIP6_MIP_tables.xlsx
++++
 
-https://esgf-node.llnl.gov/search/cmip6/
+## Part I: Get a CMIP 6 Dataset and Select Domain
+
+```{code-cell} ipython3
+import xarray as xr
+import pooch
+import pandas as pd
+import fsspec
+from pathlib import Path
+import time
+import numpy as np
+import json
+import cftime
+import matplotlib.pyplot as plt
+import netCDF4 as nc
+
+
+# Handy metpy tutorial working with xarray:
+# https://unidata.github.io/MetPy/latest/tutorials/xarray_tutorial.html#sphx-glr-tutorials-xarray-tutorial-py
+import metpy.calc as mpcalc
+from metpy.cbook import get_test_data
+from metpy.units import units
+from metpy.plots import SkewT
+```
 
 ```{code-cell} ipython3
 # Attributes of the model we want to analyze (put in csv later)
-source_id = 'AWI-CM-1-1-LR'
+#source_id = 'CESM2-SE'
 source_id = 'GFDL-ESM4'
 experiment_id = 'piControl'
-table_id = 'Amon'
+#table_id = 'Amon'
+table_id = '3hr'
 
 # Domain we wish to study
-lats = (10, 20) # lat min, lat max
-lons = (20, 29) # lon min, lon max
-times = ()
-ceil = 500 # top of domain, hPa
+lats = (15, 20) # lat min, lat max
+lons = (25, 29) # lon min, lon max
+years = (100, 105) # start year, end year (note, no leap days)
+#ceil = 500 # top of domain, hPa
 
-# variables of interest
-fields_of_interest = ("ps",  # surface pressure
+
+print(f"""Fetching domain:
+          {source_id = }
+          {experiment_id = }
+          {table_id = }
+          {lats = }
+          {lons = }
+          {years = }
+          dataset name: my_ds (xarray Dataset)""")
+```
+
+```{code-cell} ipython3
+# list of fields required for input calculations
+required_fields = ("ps",  # surface pressure
                       "cl",  # cloud fraction
                       "ta",  # air temperature
                       "ts",  # surface temperature
@@ -59,52 +94,15 @@ fields_of_interest = ("ps",  # surface pressure
                       "hurs",  # near surface RH
                       "pr", # precipitation, all phases
                       "evspsbl", # evaporation, sublimation, transpiration
-                      "wap"  # omega (subsidence rate in pressure coords)
-                     )
+                      "wap",  # omega (subsidence rate in pressure coords)
+                   )
+
+required_fields = ['tas', 'mrsos', 'mrro', 'tslsi', 'huss'] # temporary hack, but this will work for fig 11
+# i need to know which models we intend to parse for this project, they do not all have the same fields
 ```
 
 ```{code-cell} ipython3
-# hourly data (put in csv with monthly control set)
-'''
-source_id = 'GFDL-ESM4'
-experiment_id = 'piControl'
-#table_id = 'CF3hr'
-
-lats = (10, 20) # lat min, lat max
-lons = (20, 29) # lon min, lon max
-ceil = 500 # top of domain, hPa
-
-# variables of interest
-fields_of_interest = ("ps",  # surface pressure
-                      "ta",  # air temperature
-                      "ts",  # surface temperature
-                      "hus", # specific humidity
-                      "hfls", # Surface Upward Latent Heat Flux
-                      "hfss", # Surface Upward Sensible Heat Flux
-                      "rlds",  # surface downwelling longwave
-                      "rlus",  # surface upwelling longwave
-                      "rsds", # downwelling short wave
-                      "rsus", # upwelling short wave
-                      "hurs",  # near surface RH
-                      "pr",) # precipitation, all phases
-                     # "evspsbl", # evaporation, sublimation, transpiration
-                     #)
-'''
-```
-
-```{code-cell} ipython3
-import xarray as xr
-import pooch
-import pandas as pd
-import fsspec
-from pathlib import Path
-import time
-import numpy as np
-import json
-```
-
-```{code-cell} ipython3
-#get esm datastore
+# get esm datastore
 odie = pooch.create(
     path="./.cache",
     base_url="https://storage.googleapis.com/cmip6/",
@@ -113,11 +111,36 @@ odie = pooch.create(
     },
 )
 file_path = odie.fetch("pangeo-cmip6.csv")
-df_og = pd.read_csv(file_path)
+df_in = pd.read_csv(file_path)
 ```
 
 ```{code-cell} ipython3
-df_og[df_og.source_id == source_id][df_og.experiment_id == experiment_id][df_og.table_id == table_id].variable_id
+# extract the names of all fields in our selected model run
+available_fields = list(df_in[df_in.source_id == source_id][df_in.experiment_id == experiment_id][df_in.table_id == table_id].variable_id)
+```
+
+```{code-cell} ipython3
+available_fields
+```
+
+```{code-cell} ipython3
+# check that our run has all required fields, list problem variables
+fields_of_interest = []
+missing_fields = []
+for rq in required_fields:
+    if rq not in available_fields:
+        missing_fields.append(rq)
+    else:
+        fields_of_interest.append(rq)
+
+if missing_fields != []:
+    print(f"""WARNING: data from model run:
+
+                {source_id}, 
+                {table_id}, 
+                {experiment_id} 
+
+         missing required field(s): {missing_fields}""")
 ```
 
 ```{code-cell} ipython3
@@ -154,18 +177,14 @@ def get_field(variable_id,
                     experiment_id = experiment_id, table_id = table_id)
     
     local_var = fetch_var_exact(var_dict, df)
-    try:
-        zstore_url = local_var['zstore'].array[0]
-    except:
-        print(f"failed on '{variable_id}'.")
-        print(f"fields available in {local_var}")
+    zstore_url = local_var['zstore'].array[0]
     the_mapper=fsspec.get_mapper(zstore_url)
     local_var = xr.open_zarr(the_mapper, consolidated=True)
     return local_var
 ```
 
 ```{code-cell} ipython3
-def trim_field(df, lat, lon):
+def trim_field(df, lat, lon, years):
     """
     cuts out a specified domain from an xarrray field
     
@@ -173,67 +192,78 @@ def trim_field(df, lat, lon):
     lon = (minlon, maxlon)
     """
     new_field = df.sel(lat=slice(lat[0],lat[1]), lon=slice(lon[0],lon[1]))
+    new_field = new_field.isel(time=(new_field.time.dt.year > years[0]))
+    new_field = new_field.isel(time=(new_field.time.dt.year < years[1]))
     return new_field
 ```
 
-## Create one big dataset to represent our domain
-
 ```{code-cell} ipython3
 # grab all fields of interest and combine
-my_fields = [get_field(field, df_og) for field in fields_of_interest]
-small_fields = [trim_field(field, lats, lons) for field in my_fields]
+my_fields = [get_field(field, df_in) for field in fields_of_interest]
+small_fields = [trim_field(field, lats, lons, years) for field in my_fields]
 my_ds = xr.combine_by_coords(small_fields, compat="broadcast_equals", combine_attrs="drop_conflicts")
+print("Successfully acquired domain")
 ```
 
 ```{code-cell} ipython3
-# add pressure field, convert from sigma pressure
-def press_from_sigma(ds):
-    """
-    takes in an xarray Dataset with variables:
-        "ps" - surface pressure (Pa)
-        "ap" - sigma pressure coordinate
-        "b"  - sigma pressure coordinate
+# save as netcdf as per these recommendations:
+# https://xarray.pydata.org/en/stable/user-guide/dask.html#chunking-and-performance
+```
 
-    returns the Dataset with a variable "p", the full pressure (Pa)
-    """
-    ds["p"] = ds.ap + ds.b * ds.ps
-    return ds
+## Part II: Convert to MetPy Standards and Copy Betts Fig 11
+
+moved to `make_fields.ipynb`
+
+```{code-cell} ipython3
+#specific_humidity = hourly_data.huss[np.isnan(hourly_data.huss.values) == False]
+#surface_temp = hourly_data.tas[np.isnan(hourly_data.tas.values) == False]
+#td = mpcalc.dewpoint_from_specific_humidity(ps, surface_temp, specific_humidity)
 ```
 
 ```{code-cell} ipython3
-def p_lcl(ds):
-    """
-    takes in an xarray Dataset with variables:
-        "p" - pressure
-        "ts" - surface (2m) air temperature
-        "hurs" - near surface relative humidity
-        "hus" - specific humidity
-        
-    horizontally averaged over the domain of the Dataset
-    """
-    pass
+#plcl, tlcl = mpcalc.lcl(ps, surface_temp, td)
 ```
 
 ```{code-cell} ipython3
-#mean_tsurf = my_ds.ts.mean(dim=("lat", "lon"))
-#mean_psurf = my_ds.ps.mean(dim=("lat", "lon"))
+
 ```
 
 ```{code-cell} ipython3
-# apply functions defined above to the field
-#my_ds = press_from_sigma(my_ds)
+# add variables to generate fig 11
+#dparsed["td"] = mpcalc.dewpoint_from_specific_humidity(ps, dparsed.tas.metpy.convert_units("kelvin"), dparsed.huss / 1000)
 ```
 
 ```{code-cell} ipython3
-my_ds
+# take spatial average over domain, group by hour and average each hour over time domain
+#spatial_average = dparsed.mean(dim=("lat", "lon"))
+# need to add a step here to select only warm months with PBL development
+#hourly_data = spatial_average.groupby(dparsed.time.dt.hour).mean(dim="time")
 ```
 
 ```{code-cell} ipython3
-print(f"""Fetched domain:
-          {source_id = }
-          {experiment_id = }
-          {table_id = }
-          {lats = }
-          {lons = }
-          dataset name: my_ds (xarray Dataset)""")
+#plcl, tlcl = mpcalc.lcl(ps, spatial_average.tas * units.kelvin, spatial_average.td)
+```
+
+```{code-cell} ipython3
+#plot_me = np.array(plcl)[np.isnan(np.array(plcl)) == False]
+```
+
+```{code-cell} ipython3
+#plt.plot(plot_me)
+#my_array = np.array([1, 2, np.nan])
+#my_array[np.isnan(my_array) == False]
+```
+
+```{code-cell} ipython3
+#fig, ax = plt.subplots()
+#ax.plot(hourly_data.hour[np.isnan(hourly_data.huss.values) == False], plot_this,)
+```
+
+```{code-cell} ipython3
+#warm_months = np.array([5,6,7,8,9])
+#dparsed.isel(time=(dparsed.time.dt.month == warm_months.any()))
+```
+
+```{code-cell} ipython3
+
 ```
