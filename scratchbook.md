@@ -94,7 +94,7 @@ required_fields = ("ps",  # surface pressure
                       "pr", # precipitation, all phases
                       "evspsbl", # evaporation, sublimation, transpiration
                       "wap",  # omega (subsidence rate in pressure coords)
-                     )
+                   )
 
 required_fields = ['tas', 'mrsos', 'mrro', 'tslsi', 'huss'] # temporary hack, but this will work for fig 11
 # i need to know which models we intend to parse for this project, they do not all have the same fields
@@ -208,10 +208,6 @@ print("Successfully acquired domain")
 my_ds
 ```
 
-```{code-cell} ipython3
-dparsed.mrsos.values.round()
-```
-
 ## Part II: Convert to MetPy Standards and Copy Betts Fig 11
 
 ```{code-cell} ipython3
@@ -233,6 +229,10 @@ gbysoil = spatial_average.groupby(spatial_average.soil_moisture_grp)
 ```
 
 ```{code-cell} ipython3
+dparsed
+```
+
+```{code-cell} ipython3
 # calculate and plot the average diurnal cycle of lcl height
 
 fig, ax = plt.subplots()
@@ -247,7 +247,8 @@ for key in gbysoil.groups.keys():
     
     # find and plot the lcl
     plcl, tlcl = mpcalc.lcl(ps, surface_temp, td)
-    ax.plot(plcl)
+    ax.plot(plcl, label=key)
+    
 ```
 
 ```{code-cell} ipython3
@@ -261,7 +262,7 @@ plcl, tlcl = mpcalc.lcl(ps, surface_temp, td)
 ```
 
 ```{code-cell} ipython3
-plt.plot(plcl)
+
 ```
 
 ```{code-cell} ipython3
