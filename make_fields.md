@@ -21,6 +21,8 @@ import pandas as pd
 import numpy as np
 import cftime
 import matplotlib.pyplot as plt
+import netCDF4 as nc
+
 
 # Handy metpy tutorial working with xarray:
 # https://unidata.github.io/MetPy/latest/tutorials/xarray_tutorial.html#sphx-glr-tutorials-xarray-tutorial-py
@@ -31,7 +33,12 @@ from metpy.plots import SkewT
 ```
 
 ```{code-cell} ipython3
-%run get_domain.ipynb
+data_in = xr.open_dataset("data/GFDL-ESM4-piControl", decode_times=False).metpy.quantify()
+data_in['time'] = cftime.datetime.fromordinal(data_in.time, calendar='noleap') # manually reconvert to cftime
+```
+
+```{code-cell} ipython3
+
 ```
 
 ```{code-cell} ipython3
@@ -39,15 +46,28 @@ ps = 100000 * units.Pa # temporary hack, should interpolate pressure from daily 
 ```
 
 ```{code-cell} ipython3
-# parse the whole dataset to comform to metpy norms, assign units to everything
-dparsed = my_ds.metpy.parse_cf().metpy.quantify()
+specific_humidity = data_in.huss#[np.isnan(data_in.huss.values) == False]#.metpy.quantify()
+surface_temp = data_in.tas#[np.isnan(hourly_data.tas.values) == False].metpy.quantify()
+data_in["td"] = mpcalc.dewpoint_from_specific_humidity(ps, data_in.tas, data_in.huss)
 ```
 
 ```{code-cell} ipython3
-# need to add a step here to select only warm months with PBL development
+spatial_average = data_in.mean(dim=("lat", "lon"))
+spatial_average.time.values # this is super wrong rn
+```
+
+```{code-cell} ipython3
+# parse the whole dataset to comform to metpy norms, assign units to everything
+#dparsed = data_in.metpy.parse_cf().metpy.quantify()
+#dparsed
+```
+
+```{code-cell} ipython3
+# need to add a step here to select only warm months with PBL development. could do:
+# summer = my_ds.time[my_ds.time.dt.season == "JJA"]
 
 # take spatial average over domain
-spatial_average = dparsed.mean(dim=("lat", "lon"))
+#spatial_average = dparsed.mean(dim=("lat", "lon"))
 ```
 
 ```{code-cell} ipython3
@@ -57,6 +77,11 @@ spatial_average["soil_moisture_grp"] = spatial_average.mrsos.round()[np.isnan(sp
 
 ```{code-cell} ipython3
 gbysoil = spatial_average.groupby(spatial_average.soil_moisture_grp)
+gbysoil.groups.keys()
+```
+
+```{code-cell} ipython3
+gbysoil[8.0].time
 ```
 
 ```{code-cell} ipython3
@@ -65,17 +90,15 @@ gbysoil = spatial_average.groupby(spatial_average.soil_moisture_grp)
 fig, ax = plt.subplots()
 for key in gbysoil.groups.keys():
     # group by hour
-    hourly_data = gbysoil[key].groupby(gbysoil[key].time.dt.hour).mean(dim="time") 
+    #hourly_data = gbysoil[key].groupby(gbysoil[key].time.dt.hour).mean(dim="time") 
+    hourly_data = gbysoil[key].groupby(gbysoil[key].time.dt.year).mean(dim="time") 
     
-    # get the extra variables 
-    specific_humidity = hourly_data.huss[np.isnan(hourly_data.huss.values) == False]
-    surface_temp = hourly_data.tas[np.isnan(hourly_data.tas.values) == False]
-    td = mpcalc.dewpoint_from_specific_humidity(ps, surface_temp, specific_humidity)
     
     # find and plot the lcl
-    plcl, tlcl = mpcalc.lcl(ps, surface_temp, td)
-    ax.plot(plcl, label=key)
-    
+    plcl, tlcl = mpcalc.lcl(ps, hourly_data.tas, hourly_data.td)
+    #print(plcl.magnitude)
+    ax.plot(plcl[np.isnan(plcl) == False], label=key)
+    ax.legend()   
 ```
 
 ```{code-cell} ipython3

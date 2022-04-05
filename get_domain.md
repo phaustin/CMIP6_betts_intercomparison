@@ -206,8 +206,17 @@ print("Successfully acquired domain")
 ```
 
 ```{code-cell} ipython3
+from cftime import date2num
+date2num(my_ds.time, "minutes since 0000-01-01 00:00:00", calendar="noleap", has_year_zero=True)
+```
+
+```{code-cell} ipython3
 # save as netcdf as per these recommendations:
 # https://xarray.pydata.org/en/stable/user-guide/dask.html#chunking-and-performance
+# this sucks. netcdf cant handle cftime, but it is the only format xarray seems to tolerate. ugh
+my_ds["time"] = date2num(my_ds.time, "minutes since 0000-01-01 00:00:00", calendar="noleap", has_year_zero=True)
+#my_ds["datetimeindex"] = my_ds.indexes['time'].to_datetimeindex()
+my_ds.to_netcdf(f"./data/{source_id}-{experiment_id}")
 ```
 
 ## Part II: Convert to MetPy Standards and Copy Betts Fig 11
@@ -265,5 +274,5 @@ moved to `make_fields.ipynb`
 ```
 
 ```{code-cell} ipython3
-
+help(cftime.DatetimeNoLeap)
 ```
