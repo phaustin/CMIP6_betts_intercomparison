@@ -49,14 +49,35 @@ from metpy.plots import SkewT
 # Attributes of the model we want to analyze (put in csv later)
 #source_id = 'CESM2-SE'
 source_id = 'GFDL-ESM4'
+#source_id = "CanESM5" 
+#source_id = 'HadGEM3-GC31-MM'
+
+#source_id = 'E3SM-1-0'
+#source_id = 'INM-CM5-0'
+#source_id = 'NorESM2-LM'
+#source_id = 'GFDL-ESM4'
+#source_id = 'MPI-ESM1-2-HR'
+
 experiment_id = 'piControl'
+#experiment_id = 'historical'
 #table_id = 'Amon'
+#table_id = '6hrLev'
 table_id = '3hr'
 
 # Domain we wish to study
+
+# test domain #
+##################################################################
 lats = (15, 20) # lat min, lat max
 lons = (25, 29) # lon min, lon max
 years = (100, 105) # start year, end year (note, no leap days)
+#ceil = 500 # top of domain, hPa
+##################################################################
+
+# Thompson, MB
+lats = (54, 56) # lat min, lat max
+lons = (261, 263) # lon min, lon max
+years = (100, 300) # start year, end year (note, no leap days)
 #ceil = 500 # top of domain, hPa
 
 
@@ -68,6 +89,7 @@ print(f"""Fetching domain:
           {lons = }
           {years = }
           dataset name: my_ds (xarray Dataset)""")
+print("\n", "*" * 50, "\n")
 ```
 
 ```{code-cell} ipython3
@@ -89,7 +111,7 @@ required_fields = ("ps",  # surface pressure
                       "wap",  # omega (subsidence rate in pressure coords)
                    )
 
-required_fields = ['tas', 'mrsos', 'mrro', 'tslsi', 'huss'] # temporary hack, but this will work for fig 11
+required_fields = ['tas', 'mrsos', 'huss'] # temporary hack, but this will work for fig 11
 # i need to know which models we intend to parse for this project, they do not all have the same fields
 ```
 
@@ -104,6 +126,10 @@ odie = pooch.create(
 )
 file_path = odie.fetch("pangeo-cmip6.csv")
 df_in = pd.read_csv(file_path)
+```
+
+```{code-cell} ipython3
+df_in[df_in.table_id != "Amon"]
 ```
 
 ```{code-cell} ipython3
@@ -200,6 +226,7 @@ print("Successfully acquired domain")
 ```{code-cell} ipython3
 from cftime import date2num
 #date2num(my_ds.time, "minutes since 0000-01-01 00:00:00", calendar="noleap", has_year_zero=True)
+my_ds
 ```
 
 ```{code-cell} ipython3
