@@ -33,12 +33,9 @@ from metpy.plots import SkewT
 ```
 
 ```{code-cell} ipython3
-data_in = xr.open_dataset("data/GFDL-ESM4-piControl", decode_times=False).metpy.quantify()
-data_in['time'] = cftime.datetime.fromordinal(data_in.time, calendar='noleap') # manually reconvert to cftime
-```
-
-```{code-cell} ipython3
-
+data_in = xr.open_dataset("data/GFDL-ESM4-piControl.nc", decode_times=False).metpy.quantify()
+data_in["time"] = cftime.num2date(data_in.time, "minutes since 0000-01-01 00:00:00", calendar="noleap", has_year_zero=True)
+#data_in['time'] = cftime.datetime.fromordinal(data_in.time, calendar='noleap') # manually reconvert to cftime
 ```
 
 ```{code-cell} ipython3
@@ -53,21 +50,11 @@ data_in["td"] = mpcalc.dewpoint_from_specific_humidity(ps, data_in.tas, data_in.
 
 ```{code-cell} ipython3
 spatial_average = data_in.mean(dim=("lat", "lon"))
-spatial_average.time.values # this is super wrong rn
-```
-
-```{code-cell} ipython3
-# parse the whole dataset to comform to metpy norms, assign units to everything
-#dparsed = data_in.metpy.parse_cf().metpy.quantify()
-#dparsed
 ```
 
 ```{code-cell} ipython3
 # need to add a step here to select only warm months with PBL development. could do:
 # summer = my_ds.time[my_ds.time.dt.season == "JJA"]
-
-# take spatial average over domain
-#spatial_average = dparsed.mean(dim=("lat", "lon"))
 ```
 
 ```{code-cell} ipython3
@@ -81,17 +68,12 @@ gbysoil.groups.keys()
 ```
 
 ```{code-cell} ipython3
-gbysoil[8.0].time
-```
-
-```{code-cell} ipython3
 # calculate and plot the average diurnal cycle of lcl height
 
 fig, ax = plt.subplots()
 for key in gbysoil.groups.keys():
     # group by hour
-    #hourly_data = gbysoil[key].groupby(gbysoil[key].time.dt.hour).mean(dim="time") 
-    hourly_data = gbysoil[key].groupby(gbysoil[key].time.dt.year).mean(dim="time") 
+    hourly_data = gbysoil[key].groupby(gbysoil[key].time.dt.hour).mean(dim="time")  
     
     
     # find and plot the lcl

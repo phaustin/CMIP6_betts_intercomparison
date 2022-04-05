@@ -11,21 +11,13 @@ kernelspec:
   name: python3
 ---
 
-# Scratch Book
+# Get Domain
 
 **Author:** Andrew Loeppky (Lots of code stolen from Jamie Byer)
 
 **Project:** Land-surface-atmosphere coupling - CMIP6 intercomparison 
 
-experiment space for writing, testing code related to Betts CMIP6 intercomparison project
-
-**Workflow:** 
-
-1) get raw xarrays using Jamie's model fetching code. Screen models which do not contain required fields for doing the calculations
-
-2) convert to metpy CF standards using `metpy.parse_cf(<raw_xarray>)`. Generate the necessary fields to make the figures we want. 
-
-3) pare fields down to the most naive data type allowable (numpy arrays?) and plot with matplotlib (not some weird wrapper for matplotlib, too buggy).
+This code grabs a climate model from the cloud, screens it for required variable fields, then selects a user specified domain and saves it to disk as a netcdf4 file.
 
 +++
 
@@ -207,72 +199,17 @@ print("Successfully acquired domain")
 
 ```{code-cell} ipython3
 from cftime import date2num
-date2num(my_ds.time, "minutes since 0000-01-01 00:00:00", calendar="noleap", has_year_zero=True)
+#date2num(my_ds.time, "minutes since 0000-01-01 00:00:00", calendar="noleap", has_year_zero=True)
 ```
 
 ```{code-cell} ipython3
 # save as netcdf as per these recommendations:
 # https://xarray.pydata.org/en/stable/user-guide/dask.html#chunking-and-performance
-# this sucks. netcdf cant handle cftime, but it is the only format xarray seems to tolerate. ugh
+# netcdf cant handle cftime, so convert to ordinal, then back once the file is reopened
 my_ds["time"] = date2num(my_ds.time, "minutes since 0000-01-01 00:00:00", calendar="noleap", has_year_zero=True)
-#my_ds["datetimeindex"] = my_ds.indexes['time'].to_datetimeindex()
-my_ds.to_netcdf(f"./data/{source_id}-{experiment_id}")
-```
-
-## Part II: Convert to MetPy Standards and Copy Betts Fig 11
-
-moved to `make_fields.ipynb`
-
-```{code-cell} ipython3
-#specific_humidity = hourly_data.huss[np.isnan(hourly_data.huss.values) == False]
-#surface_temp = hourly_data.tas[np.isnan(hourly_data.tas.values) == False]
-#td = mpcalc.dewpoint_from_specific_humidity(ps, surface_temp, specific_humidity)
+my_ds = my_ds.drop("time_bnds")
 ```
 
 ```{code-cell} ipython3
-#plcl, tlcl = mpcalc.lcl(ps, surface_temp, td)
-```
-
-```{code-cell} ipython3
-
-```
-
-```{code-cell} ipython3
-# add variables to generate fig 11
-#dparsed["td"] = mpcalc.dewpoint_from_specific_humidity(ps, dparsed.tas.metpy.convert_units("kelvin"), dparsed.huss / 1000)
-```
-
-```{code-cell} ipython3
-# take spatial average over domain, group by hour and average each hour over time domain
-#spatial_average = dparsed.mean(dim=("lat", "lon"))
-# need to add a step here to select only warm months with PBL development
-#hourly_data = spatial_average.groupby(dparsed.time.dt.hour).mean(dim="time")
-```
-
-```{code-cell} ipython3
-#plcl, tlcl = mpcalc.lcl(ps, spatial_average.tas * units.kelvin, spatial_average.td)
-```
-
-```{code-cell} ipython3
-#plot_me = np.array(plcl)[np.isnan(np.array(plcl)) == False]
-```
-
-```{code-cell} ipython3
-#plt.plot(plot_me)
-#my_array = np.array([1, 2, np.nan])
-#my_array[np.isnan(my_array) == False]
-```
-
-```{code-cell} ipython3
-#fig, ax = plt.subplots()
-#ax.plot(hourly_data.hour[np.isnan(hourly_data.huss.values) == False], plot_this,)
-```
-
-```{code-cell} ipython3
-#warm_months = np.array([5,6,7,8,9])
-#dparsed.isel(time=(dparsed.time.dt.month == warm_months.any()))
-```
-
-```{code-cell} ipython3
-help(cftime.DatetimeNoLeap)
+my_ds.to_netcdf(f"./data/{source_id}-{experiment_id}.nc", engine="netcdf4")
 ```
