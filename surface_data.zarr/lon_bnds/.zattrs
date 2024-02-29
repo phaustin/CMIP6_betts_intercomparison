@@ -1,0 +1,9 @@
+{
+    "_ARRAY_DIMENSIONS": [
+        "lon",
+        "bnds"
+    ],
+    "axis": "X",
+    "long_name": "longitude bounds",
+    "units": "degrees_east"
+}

@@ -1,0 +1,10 @@
+{
+    "_ARRAY_DIMENSIONS": [],
+    "axis": "Z",
+    "cell_methods": "time: point",
+    "description": "~2 m standard surface air temperature and surface humidity  height",
+    "long_name": "height",
+    "positive": "up",
+    "standard_name": "height",
+    "units": "m"
+}

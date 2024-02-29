@@ -1,0 +1,11 @@
+{
+    "_ARRAY_DIMENSIONS": [
+        "lon"
+    ],
+    "axis": "X",
+    "bounds": "lon_bnds",
+    "cell_methods": "time: point",
+    "long_name": "longitude",
+    "standard_name": "longitude",
+    "units": "degrees_east"
+}
